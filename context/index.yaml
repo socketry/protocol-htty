@@ -9,9 +9,10 @@ metadata:
 files:
 - path: getting-started.md
   title: Getting Started
-  description: This guide explains how to get started with `protocol-htty` for terminal-safe
-    HTTP/2 byte stream transport.
+  description: This guide explains how to get started with `protocol-htty` for DCS-bootstrapped
+    raw HTTP/2 byte stream transport.
 - path: specification.md
   title: HTTY Specification
-  description: This document specifies HTTY as a terminal-safe framing layer for carrying
-    a plaintext HTTP/2 (`h2c`) byte stream over terminal side channels.
+  description: This document specifies HTTY as a DCS-bootstrapped raw-mode takeover
+    transport for carrying a plaintext HTTP/2 (`h2c`) connection over terminal-attached
+    sessions.

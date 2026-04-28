@@ -10,41 +10,49 @@ require "protocol/htty"
 
 describe Protocol::HTTY::Stream do
 	let(:writer) {StringIO.new}
-	let(:stream) {subject.new(StringIO.new, writer, packet_size: 8)}
+	let(:stream) {subject.open(IO::Stream::Duplex(StringIO.new, writer))}
 	
-	it "chunks opaque payload into HTTY chunks" do
+	it "writes raw bytes after bootstrap" do
+		stream.write_bootstrap
 		stream.write(Protocol::HTTP2::CONNECTION_PREFACE)
+		stream.flush
 		
-		expect(writer.string.scan(/\ePHTTY;1;/).size).to be > 1
+		expect(writer.string).to be == "\eP+Hraw\e\\#{Protocol::HTTP2::CONNECTION_PREFACE}"
 	end
 	
-	it "reads back opaque bytes from HTTY chunks" do
-		stream.write(Protocol::HTTP2::CONNECTION_PREFACE)
+	it "consumes the bootstrap before reading raw bytes" do
+		writer.write("\eP+Hraw\e\\#{Protocol::HTTP2::CONNECTION_PREFACE}")
 		writer.rewind
-		
-		reader = subject.new(writer, StringIO.new)
+
+		reader = subject.open(IO::Stream::Duplex(writer, StringIO.new), bootstrap: :read)
 		
 		expect(reader.read(Protocol::HTTP2::CONNECTION_PREFACE.bytesize)).to be == Protocol::HTTP2::CONNECTION_PREFACE
-		reader.close
-		expect(reader.read).to be_nil
+		expect(reader.read).to be == ""
 	end
 	
-	it "returns all buffered bytes when length is omitted" do
-		stream.write("hello")
+	it "writes the bootstrap when opened in write mode" do
+		writer = StringIO.new
+		stream = subject.open(IO::Stream::Duplex(StringIO.new, writer), bootstrap: :write)
+		
+		expect(writer.string).to be == "\eP+Hraw\e\\"
 		stream.close
+	end
+	
+	it "returns all bytes when length is omitted" do
+		writer.write("hello")
 		writer.rewind
 		
-		reader = subject.new(writer, StringIO.new)
+		reader = subject.open(IO::Stream::Duplex(writer, StringIO.new))
 		
 		expect(reader.read).to be == "hello"
-		expect(reader.read).to be_nil
+		expect(reader.read).to be == ""
 	end
 	
 	it "exposes the underlying output stream" do
 		expect(stream.io).to be(:is_a?, ::IO::Stream::Buffered)
 	end
 	
-	it "flushes through the underlying framer" do
+	it "flushes through the underlying stream" do
 		stream.write("hello")
 		
 		expect do
@@ -65,6 +73,14 @@ describe Protocol::HTTY::Stream do
 		
 		expect(writer).not.to be(:closed?)
 	end
+
+	it "close_write closes writes but preserves readability" do
+		stream.close_write
+
+		expect(stream).to be(:closed?)
+		expect(stream).to be(:readable?)
+		expect(writer).not.to be(:closed?)
+	end
 	
 	it "reports when the remote side is still readable" do
 		expect(stream).to be(:readable?)
@@ -80,7 +96,7 @@ describe Protocol::HTTY::Stream do
 	
 	it "wraps raw IO handles using IO::Stream" do
 		Tempfile.create("protocol-htty") do |file|
-			io_stream = subject.new(file, file).io
+			io_stream = subject.open(file).io
 			
 			expect(io_stream).to be(:is_a?, ::IO::Stream::Buffered)
 			io_stream.close
@@ -89,7 +105,7 @@ describe Protocol::HTTY::Stream do
 	
 	it "does not close wrapped raw IO handles when closed" do
 		Tempfile.create("protocol-htty") do |file|
-			wrapped_stream = subject.new(file, file)
+			wrapped_stream = subject.open(file)
 			
 			wrapped_stream.close
 			

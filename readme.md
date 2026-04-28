@@ -1,6 +1,6 @@
 # Protocol::HTTY
 
-`protocol-htty` defines a small, terminal-safe framing layer for carrying an opaque byte stream over TTY side channels.
+`protocol-htty` defines a small, terminal-safe bootstrap for carrying a raw HTTP/2 byte stream over terminal-attached sessions.
 
 [![Development Status](https://github.com/socketry/protocol-htty/workflows/Test/badge.svg)](https://github.com/socketry/protocol-htty/actions?workflow=Test)
 
@@ -10,33 +10,40 @@ Traditional terminal user interfaces are useful, but they are also a poor fit fo
 
 In practice, this means TUIs often force applications into compromises: text-heavy layouts, ad-hoc protocols, and bespoke escape-sequence behavior that is hard to standardise across runtimes and terminals.
 
-HTTY exists to keep the portability and deployment advantages of terminal workflows while avoiding the need to build an entire application model out of terminal control codes. Instead of asking the terminal stream itself to represent higher-level UI state, HTTY provides a small framing layer that can carry a normal plaintext HTTP/2 connection alongside terminal traffic, enabling applications to attach browser surfaces to a normal terminal session over HTTY.
+HTTY exists to keep the portability and deployment advantages of terminal workflows while avoiding the need to build an entire application model out of terminal control codes. Instead of asking the terminal stream itself to represent higher-level UI state, HTTY provides a small bootstrap that can hand a terminal session over to a normal plaintext HTTP/2 connection, enabling applications to attach browser surfaces to a normal terminal session over HTTY.
 
 ## Design
 
-HTTY does not model application requests, regions, or resources. It transports the two directions of a single plaintext HTTP/2 (`h2c`) connection over terminal-safe chunks without introducing a second session protocol.
+HTTY does not model application requests, regions, or resources. It transports the two directions of a single plaintext HTTP/2 (`h2c`) connection over a raw terminal-attached byte stream without introducing a second session protocol.
 
-Each chunk is encoded as a DCS sequence:
+HTTY v1 begins with one DCS bootstrap sequence:
 
 ``` text
-ESC P HTTY;1;BASE64_CHUNK ESC \
+ESC P + H raw ESC \
 ```
 
-The framing layer intentionally stays small so it can be reimplemented in other runtimes.
+After that bootstrap has been consumed, the session carries plain `h2c` bytes. The takeover layer intentionally stays small so it can be reimplemented in other runtimes.
 
 ## Usage
 
 Please see the [project documentation](https://socketry.github.io/protocol-htty/) for more details.
 
-  - [Getting Started](https://socketry.github.io/protocol-htty/guides/getting-started/index) - This guide explains how to get started with `protocol-htty` for terminal-safe HTTP/2 byte stream transport.
+  - [Getting Started](https://socketry.github.io/protocol-htty/guides/getting-started/index) - This guide explains how to get started with `protocol-htty` for DCS-bootstrapped raw HTTP/2 byte stream transport.
 
-  - [HTTY Specification](https://socketry.github.io/protocol-htty/guides/specification/index) - This document specifies HTTY as a terminal-safe framing layer for carrying a plaintext HTTP/2 (`h2c`) byte stream over terminal side channels.
+  - [HTTY Specification](https://socketry.github.io/protocol-htty/guides/specification/index) - This document specifies HTTY as a DCS-bootstrapped raw-mode takeover transport for carrying a plaintext HTTP/2 (`h2c`) connection over terminal-attached sessions.
 
 ## Releases
 
 Please see the [project releases](https://socketry.github.io/protocol-htty/releases/index) for all releases.
 
+### Unreleased
+
+  - Add `Protocol::HTTY::Stream.open(stream, **options)` as the preferred constructor for bootstrapping HTTY over an existing stream.
+  - Inline HTTY bootstrap encoding and decoding into `Protocol::HTTY::Stream`, keeping the public API focused on the single raw byte-stream abstraction used by HTTP/2.
+
 ### v0.1.0
+
+  - Initial release.
 
 ## Contributing
 

@@ -7,85 +7,99 @@ require "io/stream"
 
 module Protocol
 	module HTTY
-		# Transport an opaque byte stream over HTTY chunks.
+		# Transport an opaque byte stream after the HTTY bootstrap handshake.
 		class Stream
-			# Since base64 encoding adds 33% overhead, we can fit 3KB of binary data into a single HTTY chunk without exceeding the typical MTU of 4KB:
-			PACKET_SIZE = 1024*3
+			ESC = "\e"
+			DCS = "#{ESC}P"
+			ST = "#{ESC}\\"
+			BOOTSTRAP_PREFIX = "+H"
+			RAW_MODE = "raw"
 			
-			# Create a stream on top of HTTY framed input and output.
-			# @parameter input [IO | IO::Stream] The source of framed HTTY chunks.
-			# @parameter output [IO | IO::Stream | Nil] The sink for framed HTTY chunks.
-			# @parameter packet_size [Integer] The maximum payload size for each chunk.
-			def initialize(input, output = input, packet_size: PACKET_SIZE)
-				@framer = Framer.new(::IO::Stream(input), ::IO::Stream(output))
-				@packet_size = packet_size
-				@buffer = +"".b
-				@local_closed = false
-				@remote_closed = false
+			def self.open(stream, bootstrap: nil, mode: RAW_MODE)
+				stream = self.new(::IO::Stream(stream))
+				
+				case bootstrap
+				when :write
+					stream.write_bootstrap(mode)
+				when :read
+					actual_mode = stream.read_bootstrap
+					
+					unless actual_mode == mode
+						raise ProtocolError, "Expected HTTY bootstrap mode #{mode.inspect}, got #{actual_mode.inspect}"
+					end
+				end
+				
+				return stream
 			end
 			
-			attr :framer
+			# Create a stream on top of a raw byte-preserving transport.
+			# @parameter stream [IO::Stream] The duplex byte stream used after bootstrap.
+			def initialize(stream)
+				@stream = stream
+				@local_closed = false
+			end
 			
-			# Return the writable IO object used by the underlying framer.
-			# @returns [IO | IO::Stream] The output side of the framed transport.
+			attr :stream
+			
+			# Return the underlying duplex stream.
 			def io
-				@framer.output
+				@stream
+			end
+			
+			def write_bootstrap(mode = RAW_MODE)
+				@stream.write("#{DCS}#{BOOTSTRAP_PREFIX}#{mode}#{ST}")
+				@stream.flush
+			end
+			
+			def read_bootstrap
+				while payload = read_payload
+					next unless payload.start_with?(BOOTSTRAP_PREFIX)
+					mode = payload.delete_prefix(BOOTSTRAP_PREFIX)
+					
+					unless mode == RAW_MODE
+						raise ProtocolError, "Unsupported HTTY bootstrap mode: #{mode.inspect}"
+					end
+					
+					return mode
+				end
+				
+				return nil
 			end
 			
 			# Read application bytes from the HTTY transport.
-			# @parameter length [Integer | Nil] The exact number of bytes to read, or `nil` for all buffered bytes.
-			# @returns [String | Nil] The requested bytes, an empty binary string for `0`, or `nil` if more data is required or the remote side is closed.
 			def read(length = nil)
 				return +"".b if length == 0
-				
-				fill(length)
-				
-				return nil if @buffer.empty? && @remote_closed
-				return nil if @buffer.empty?
-				return nil if length && @buffer.bytesize < length && !@remote_closed
-				
-				if length
-					return @buffer.slice!(0, length)
-				else
-					return @buffer.slice!(0, @buffer.bytesize)
-				end
+				return @stream.read(length)
 			end
 			
-			# Write application bytes as one or more HTTY chunks.
-			# @parameter data [String | Array(Integer)] The opaque bytes to send.
+			# Write application bytes after bootstrap.
 			# @returns [self]
 			# @raises [IOError] If the local side of the transport is closed.
 			def write(data)
 				raise IOError, "HTTY stream is closed for writing!" if @local_closed
 				
-				data = data.to_s.b
-				
-				until data.empty?
-					chunk = data.byteslice(0, @packet_size)
-					@framer.write_chunk(chunk)
-					data = data.byteslice(chunk.bytesize..)
-				end
-				
-				@framer.flush
+				@stream.write(data.to_s.b)
 				
 				return self
 			end
 			
-			# Flush any buffered output through the underlying framer.
+			# Flush any buffered output through the underlying stream.
 			# @returns [void]
 			def flush
-				@framer.flush
+				@stream.flush
 			end
 			
 			# Close the local write side of this stream abstraction.
 			# HTTY does not define a close packet, and closing this object does not close the underlying terminal IO.
 			# @returns [void]
-			def close
+			def close_write(error = nil)
 				unless @local_closed
 					@local_closed = true
-					@framer.flush
+					@stream.flush
 				end
 			end
+			
+			alias close close_write
 			
 			# Check whether the local side of the transport is closed.
 			# @returns [bool] True if local writes have been closed.
@@ -96,28 +110,41 @@ module Protocol
 			# Check whether the remote side may still provide more data.
 			# @returns [bool] True if the remote side has not sent or implied a close.
 			def readable?
-				!@remote_closed
+				!@stream.closed?
 			end
 			
 			private
 			
-			def fill(length)
-				while needs_more_data?(length)
-					chunk = @framer.read_chunk
+			def read_payload
+				while prefix = @stream.read(1)
+					next unless prefix == ESC
 					
-					unless chunk
-						@remote_closed = true
-						break
-					end
-					@buffer << chunk
+					marker = @stream.read(1)
+					return nil unless marker
+					next unless marker == "P"
+					
+					return consume_packet
 				end
+				
+				return nil
 			end
 			
-			def needs_more_data?(length)
-				return false if @remote_closed
-				return @buffer.empty? unless length
+			def consume_packet
+				buffer = +""
 				
-				@buffer.bytesize < length
+				while chunk = @stream.read(1)
+					if chunk == ESC
+						terminator = @stream.read(1)
+						return buffer if terminator == "\\"
+						
+						buffer << chunk
+						buffer << terminator if terminator
+					else
+						buffer << chunk
+					end
+				end
+				
+				raise EOFError, "Incomplete HTTY chunk!"
 			end
 		end
 	end

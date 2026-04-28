@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide explains how to get started with `protocol-htty` for terminal-safe HTTP/2 byte stream transport.
+This guide explains how to get started with `protocol-htty` for DCS-bootstrapped raw HTTP/2 byte stream transport.
 
 ## Installation
 
@@ -12,99 +12,98 @@ $ bundle add protocol-htty
 
 ## Why HTTY Exists
 
-When you need to carry an `h2c` connection over stdin/stdout, PTYs, or SSH sessions, raw HTTP/2 bytes are not safe to write directly into the terminal stream. Control bytes can interfere with terminal parsing, corrupt visible output, or be truncated by terminal-oriented infrastructure.
+When you need to carry an `h2c` connection over stdin/stdout, PTYs, or SSH sessions, raw HTTP/2 bytes are not safe to write directly into a terminal that is still operating in ordinary text mode. HTTY solves that by emitting one terminal-safe bootstrap sequence and then handing the session over to raw byte transport.
 
 Use `protocol-htty` when you need:
 
-- **Terminal-safe transport**: Carry arbitrary HTTP/2 bytes through terminal channels without rendering control data.
-- **A small framing layer**: Encode and decode byte chunks without introducing a second application protocol.
-- **Cross-runtime interoperability**: Keep the framing simple enough to reimplement in other languages or environments.
+- **Terminal-safe takeover**: Start HTTY without rendering the transition as visible terminal text.
+- **Raw byte transport**: Carry HTTP/2 bytes directly once takeover has happened.
+- **Cross-runtime interoperability**: Keep the bootstrap small enough to reimplement in other languages or environments.
 
-Without HTTY, higher-level systems would need to invent their own ad hoc framing and decoding rules before they could safely carry HTTP/2 over terminal I/O.
+Without HTTY, higher-level systems would need to invent their own ad hoc terminal bootstrap and raw-mode coordination before they could safely carry HTTP/2 over terminal I/O.
 
 ## Core Concepts
 
-- {ruby Protocol::HTTY::Framer} encodes and decodes individual HTTY chunks.
-- {ruby Protocol::HTTY::Stream} reconstructs an opaque byte stream on top of HTTY chunks.
+- {ruby Protocol::HTTY::Stream} writes and reads the HTTY bootstrap sequence, then exposes the raw byte stream used after bootstrap.
 - HTTY transports bytes only. HTTP/2 connection setup, stream lifecycle, and shutdown semantics remain owned by HTTP/2.
 
 ## Usage
 
-The low-level API is intentionally small. Start with {ruby Protocol::HTTY::Framer} if you need direct control over individual chunks, or use {ruby Protocol::HTTY::Stream} if you want an opaque byte stream interface.
+The low-level API is intentionally small. Use {ruby Protocol::HTTY::Stream} to perform the bootstrap step and then carry raw bytes.
 
-### Framing Individual Chunks
+### Writing The Bootstrap
 
-If you are integrating HTTY into an existing transport, start with the framer. This gives you direct access to the terminal-safe envelope without adding stream reconstruction logic.
+If you are integrating HTTY into an existing transport, create a stream wrapper around your byte-oriented IO. This gives you direct access to the terminal-safe bootstrap without adding any higher-level protocol policy.
 
-Use the framer when you need:
+Use explicit bootstrap calls when you need:
 
-- **Protocol integration**: You already manage read and write boundaries elsewhere.
-- **Debugging**: You want to inspect the actual encoded HTTY output.
-- **Custom transport composition**: You are building your own byte-stream wrapper.
+- **Protocol integration**: You already manage stream ownership elsewhere.
+- **Debugging**: You want to inspect the actual bootstrap bytes.
+- **Custom transport composition**: You are building your own raw byte-stream wrapper.
 
 ~~~ ruby
 require "stringio"
+require "io/stream"
 require "protocol/htty"
 
 output = StringIO.new
-framer = Protocol::HTTY::Framer.new(StringIO.new, output)
+stream = IO::Stream::Duplex(StringIO.new, output)
+htty = Protocol::HTTY::Stream.new(stream)
 
-framer.write_chunk("hello")
-framer.flush
+htty.write_bootstrap
 
 output.string
-# => "\ePHTTY;1;aGVsbG8=\e\\"
+# => "\eP+Hraw\e\\"
 ~~~
 
-### Streaming Opaque Bytes
+### Bootstrapping A Raw Stream
 
-If you want HTTY to behave like a normal byte stream, use {ruby Protocol::HTTY::Stream}. It splits outgoing data into HTTY chunks, flushes them through the underlying transport, and reconstructs the original bytes on read.
+If you want HTTY to behave like a normal byte stream, use {ruby Protocol::HTTY::Stream}. It can emit the bootstrap for you, or consume it on the receiving side, and then expose the carried bytes directly.
 
 This is the right level when you need:
 
-- **HTTP/2 transport bridging**: Feed an `h2c` connection through terminal-safe framing.
-- **Chunk reconstruction**: Ignore HTTY chunk boundaries and work with plain bytes.
-- **Simple integration**: Read and write data without manually handling base64 envelopes.
+- **HTTP/2 transport bridging**: Feed an `h2c` connection through HTTY without defining another message layer.
+- **Bootstrap handling**: Keep the raw-mode transition in one place.
+- **Simple integration**: Read and write bytes without manually parsing terminal control data.
 
 ~~~ ruby
 require "stringio"
+require "io/stream"
 require "protocol/htty"
 
 transport = StringIO.new
-writer = Protocol::HTTY::Stream.new(StringIO.new, transport)
+writer = Protocol::HTTY::Stream.open(IO::Stream::Duplex(StringIO.new, transport), bootstrap: :write)
 
 writer.write("hello world")
-writer.close
+writer.flush
 
 transport.rewind
 
-reader = Protocol::HTTY::Stream.new(transport, StringIO.new)
+reader = Protocol::HTTY::Stream.open(IO::Stream::Duplex(transport, StringIO.new), bootstrap: :read)
 
 reader.read(11)
 # => "hello world"
-
-reader.read
-# => nil
 ~~~
 
 ### Carrying an HTTP/2 Preface
 
-HTTY does not interpret HTTP/2 frames. It only preserves byte ordering while moving the connection through terminal-safe chunks. That makes it suitable for forwarding the client connection preface and subsequent frame exchange unchanged.
+HTTY does not interpret HTTP/2 frames. It only performs the bootstrap and then preserves byte ordering while the connection runs over the raw transport. That makes it suitable for forwarding the client connection preface and subsequent frame exchange unchanged.
 
 ~~~ ruby
 require "stringio"
+require "io/stream"
 require "protocol/http2"
 require "protocol/htty"
 
 transport = StringIO.new
-stream = Protocol::HTTY::Stream.new(StringIO.new, transport)
+stream = Protocol::HTTY::Stream.open(IO::Stream::Duplex(StringIO.new, transport), bootstrap: :write)
 
 stream.write(Protocol::HTTP2::CONNECTION_PREFACE)
-stream.close
+stream.flush
 
 transport.rewind
 
-reader = Protocol::HTTY::Stream.new(transport, StringIO.new)
+reader = Protocol::HTTY::Stream.open(IO::Stream::Duplex(transport, StringIO.new), bootstrap: :read)
 preface = reader.read(Protocol::HTTP2::CONNECTION_PREFACE.bytesize)
 
 puts preface == Protocol::HTTP2::CONNECTION_PREFACE

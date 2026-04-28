@@ -3,6 +3,8 @@
 # Released under the MIT License.
 # Copyright, 2026, by Samuel Williams.
 
-require_relative "htty/version"
-require_relative "htty/error"
-require_relative "htty/stream"
+require "protocol/htty"
+
+$stdout.binmode
+
+Protocol::HTTY::Stream.new($stdout).write_bootstrap
