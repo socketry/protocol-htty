@@ -60,6 +60,12 @@ describe Protocol::HTTY::Stream do
 		expect(stream).to be(:closed?)
 	end
 	
+	it "does not close the underlying output stream" do
+		stream.close
+		
+		expect(writer).not.to be(:closed?)
+	end
+	
 	it "reports when the remote side is still readable" do
 		expect(stream).to be(:readable?)
 	end
@@ -78,6 +84,17 @@ describe Protocol::HTTY::Stream do
 			
 			expect(io_stream).to be(:is_a?, ::IO::Stream::Buffered)
 			io_stream.close
+		end
+	end
+	
+	it "does not close wrapped raw IO handles when closed" do
+		Tempfile.create("protocol-htty") do |file|
+			wrapped_stream = subject.new(file, file)
+			
+			wrapped_stream.close
+			
+			expect(file).not.to be(:closed?)
+			file.close
 		end
 	end
 end

@@ -18,12 +18,16 @@ The framing layer intentionally stays small so it can be reimplemented in other 
 
 ## Guides
 
-- [Getting Started](guides/getting-started/readme.md)
-- [Specification](guides/specification/readme.md)
+  - [Getting Started](guides/getting-started/readme.md)
+  - [Specification](guides/specification/readme.md)
 
 ## Usage
 
-The low-level API is intentionally small. `{Protocol::HTTY::Framer}` reads and writes HTTY chunks, while `{Protocol::HTTY::Stream}` exposes an opaque byte stream on top of those chunks.
+Please see the [project documentation](https://socketry.github.io/protocol-htty/) for more details.
+
+  - [Getting Started](https://socketry.github.io/protocol-htty/guides/getting-started/index) - This guide explains how to get started with `protocol-htty` for terminal-safe HTTP/2 byte stream transport.
+
+  - [HTTY Specification](https://socketry.github.io/protocol-htty/guides/specification/index) - This document specifies HTTY as a terminal-safe framing layer for carrying a plaintext HTTP/2 (`h2c`) byte stream over terminal side channels.
 
 ### Framing Individual Chunks
 
@@ -65,7 +69,9 @@ This transport layer does not interpret the payload beyond chunk framing. Higher
 
 ## Releases
 
-There are no documented releases.
+Please see the [project releases](https://socketry.github.io/protocol-htty/releases/index) for all releases.
+
+### Unreleased
 
 ## Contributing
 

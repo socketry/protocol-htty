@@ -1,0 +1,17 @@
+# Automatically generated context index for Utopia::Project guides.
+# Do not edit then files in this directory directly, instead edit the guides and then run `bake utopia:project:agent:context:update`.
+---
+description: A terminal-safe transport for carrying opaque HTTP/2 bytes over TTY side
+  channels.
+metadata:
+  documentation_uri: https://socketry.github.io/protocol-htty/
+  source_code_uri: https://github.com/socketry/protocol-htty.git
+files:
+- path: getting-started.md
+  title: Getting Started
+  description: This guide explains how to get started with `protocol-htty` for terminal-safe
+    HTTP/2 byte stream transport.
+- path: specification.md
+  title: HTTY Specification
+  description: This document specifies HTTY as a terminal-safe framing layer for carrying
+    a plaintext HTTP/2 (`h2c`) byte stream over terminal side channels.

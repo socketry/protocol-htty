@@ -77,8 +77,8 @@ module Protocol
 				@framer.flush
 			end
 			
-			# Close the local side of the transport.
-			# HTTY does not define a close packet; remote peers observe closure via the underlying transport.
+			# Close the local write side of this stream abstraction.
+			# HTTY does not define a close packet, and closing this object does not close the underlying terminal IO.
 			# @returns [void]
 			def close
 				unless @local_closed
