@@ -4,6 +4,14 @@
 
 [![Development Status](https://github.com/socketry/protocol-htty/workflows/Test/badge.svg)](https://github.com/socketry/protocol-htty/actions?workflow=Test)
 
+## Motivation
+
+Traditional terminal user interfaces are useful, but they are also a poor fit for many modern interactions. They are constrained by character-cell rendering, limited layout semantics, awkward input models, and a presentation layer that was never designed for rich documents or structured application state.
+
+In practice, this means TUIs often force applications into compromises: text-heavy layouts, ad-hoc protocols, and bespoke escape-sequence behavior that is hard to standardise across runtimes and terminals.
+
+HTTY exists to keep the portability and deployment advantages of terminal workflows while avoiding the need to build an entire application model out of terminal control codes. Instead of asking the terminal stream itself to represent higher-level UI state, HTTY provides a small framing layer that can carry a normal plaintext HTTP/2 connection alongside terminal traffic, enabling applications to attach browser surfaces to a normal terminal session over HTTY.
+
 ## Design
 
 HTTY does not model application requests, regions, or resources. It transports the two directions of a single plaintext HTTP/2 (`h2c`) connection over terminal-safe chunks without introducing a second session protocol.
@@ -16,11 +24,6 @@ ESC P HTTY;1;BASE64_CHUNK ESC \
 
 The framing layer intentionally stays small so it can be reimplemented in other runtimes.
 
-## Guides
-
-  - [Getting Started](guides/getting-started/readme.md)
-  - [Specification](guides/specification/readme.md)
-
 ## Usage
 
 Please see the [project documentation](https://socketry.github.io/protocol-htty/) for more details.
@@ -28,44 +31,6 @@ Please see the [project documentation](https://socketry.github.io/protocol-htty/
   - [Getting Started](https://socketry.github.io/protocol-htty/guides/getting-started/index) - This guide explains how to get started with `protocol-htty` for terminal-safe HTTP/2 byte stream transport.
 
   - [HTTY Specification](https://socketry.github.io/protocol-htty/guides/specification/index) - This document specifies HTTY as a terminal-safe framing layer for carrying a plaintext HTTP/2 (`h2c`) byte stream over terminal side channels.
-
-### Framing Individual Chunks
-
-``` ruby
-require "stringio"
-require "protocol/htty"
-
-output = StringIO.new
-framer = Protocol::HTTY::Framer.new(StringIO.new, output)
-
-framer.write_chunk("hello")
-
-output.string
-# => "\ePHTTY;1;aGVsbG8=\e\\"
-```
-
-### Streaming Opaque Bytes
-
-``` ruby
-require "stringio"
-require "protocol/htty"
-
-transport = StringIO.new
-writer = Protocol::HTTY::Stream.new(StringIO.new, transport, packet_size: 4)
-
-writer.write("hello world")
-writer.close
-
-transport.rewind
-reader = Protocol::HTTY::Stream.new(transport, StringIO.new)
-
-reader.read(11)
-# => "hello world"
-reader.read
-# => nil
-```
-
-This transport layer does not interpret the payload beyond chunk framing. Higher-level code can carry the two directions of a plaintext HTTP/2 connection over the resulting byte streams.
 
 ## Releases
 
