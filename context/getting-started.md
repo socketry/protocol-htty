@@ -110,20 +110,3 @@ preface = reader.read(Protocol::HTTP2::CONNECTION_PREFACE.bytesize)
 puts preface == Protocol::HTTP2::CONNECTION_PREFACE
 # => true
 ~~~
-
-## Best Practices
-
-- Use {ruby Protocol::HTTY::Stream} unless you specifically need direct control over HTTY chunk boundaries.
-- Keep HTTY responsible only for framing and byte transport. Let HTTP/2 express readiness, stream lifecycle, and shutdown.
-- Close or flush writers when you need encoded chunks to become visible to the underlying transport immediately.
-- Treat HTTY as a transport shim, not an application protocol.
-
-## Common Pitfalls
-
-- Do not assign semantic meaning to HTTY chunk boundaries. Receivers must reconstruct a continuous byte stream.
-- Do not mix raw HTTP/2 bytes with HTTY framing on the same transport direction after framing has started.
-- Do not add request or rendering semantics at the HTTY layer. Those belong to higher-level systems built on top of the reconstructed HTTP/2 connection.
-
-## Next Steps
-
-For the on-wire format, versioning rules, and sender/receiver requirements, see the [Specification](../specification/readme).
