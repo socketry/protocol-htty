@@ -16,6 +16,11 @@ ESC P HTTY;1;BASE64_CHUNK ESC \
 
 The framing layer intentionally stays small so it can be reimplemented in other runtimes.
 
+## Guides
+
+- [Getting Started](guides/getting-started/readme.md)
+- [Specification](guides/specification/readme.md)
+
 ## Usage
 
 The low-level API is intentionally small. `{Protocol::HTTY::Framer}` reads and writes HTTY chunks, while `{Protocol::HTTY::Stream}` exposes an opaque byte stream on top of those chunks.
