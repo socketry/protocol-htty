@@ -36,7 +36,7 @@ Please see the [project documentation](https://socketry.github.io/protocol-htty/
 
 Please see the [project releases](https://socketry.github.io/protocol-htty/releases/index) for all releases.
 
-### Unreleased
+### v0.2.0
 
   - Add `Protocol::HTTY::Stream.open(stream, **options)` as the preferred constructor for bootstrapping HTTY over an existing stream.
   - Inline HTTY bootstrap encoding and decoding into `Protocol::HTTY::Stream`, keeping the public API focused on the single raw byte-stream abstraction used by HTTP/2.
