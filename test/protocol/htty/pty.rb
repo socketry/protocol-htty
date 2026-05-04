@@ -20,6 +20,9 @@ class PTYStream
 		@buffer = +"".b
 	end
 	
+	attr :input
+	attr :output
+	
 	def read(length)
 		while @buffer.bytesize < length
 			@buffer << @input.readpartial(4096).b
@@ -104,7 +107,7 @@ describe "HTTY over a real PTY" do
 	it "ignores terminal noise before the bootstrap" do
 		Timeout.timeout(5) do
 			with_fixture("bootstrap") do |stream|
-				framer = Protocol::HTTY::Stream.new(stream)
+				framer = Protocol::HTTY::Stream.new(stream.input, stream.output)
 				
 				expect(framer.read_bootstrap).to be == "raw"
 				expect(stream.read(3)).to be == "RAW"
@@ -115,7 +118,7 @@ describe "HTTY over a real PTY" do
 	it "delivers the HTTP/2 connection preface after raw takeover" do
 		Timeout.timeout(5) do
 			with_fixture("raw_preface") do |stream|
-				framer = Protocol::HTTY::Stream.new(stream)
+				framer = Protocol::HTTY::Stream.new(stream.input, stream.output)
 				
 				expect(framer.read_bootstrap).to be == "raw"
 				
@@ -130,7 +133,8 @@ describe "HTTY over a real PTY" do
 	it "runs an HTTP/2 session until command-side GOAWAY" do
 		Timeout.timeout(5) do
 			with_fixture("http2_server") do |stream|
-				Protocol::HTTY::Stream.new(stream).read_bootstrap
+				stream = Protocol::HTTY::Stream.new(stream.input, stream.output)
+				stream.read_bootstrap
 				
 				framer = Protocol::HTTP2::Framer.new(stream)
 				client = Client.new(framer)
@@ -162,7 +166,8 @@ describe "HTTY over a real PTY" do
 	it "treats command exit after bootstrap without GOAWAY as an abort" do
 		Timeout.timeout(5) do
 			with_fixture("abort_after_bootstrap") do |stream|
-				expect(Protocol::HTTY::Stream.new(stream).read_bootstrap).to be == "raw"
+				stream = Protocol::HTTY::Stream.new(stream.input, stream.output)
+				expect(stream.read_bootstrap).to be == "raw"
 				
 				framer = Protocol::HTTP2::Framer.new(stream)
 				

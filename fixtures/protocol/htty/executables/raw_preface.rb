@@ -13,7 +13,7 @@ $stdout.binmode
 at_exit {$stdin.cooked! rescue nil}
 
 $stdin.raw! if $stdin.isatty
-Protocol::HTTY::Stream.new($stdout).write_bootstrap
+Protocol::HTTY::Stream.new($stdin, $stdout).write_bootstrap
 
 preface = $stdin.read(Protocol::HTTP2::CONNECTION_PREFACE.bytesize)
 

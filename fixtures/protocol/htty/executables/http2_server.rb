@@ -99,7 +99,7 @@ class Server < Protocol::HTTP2::Server
 end
 
 $stdin.raw! if $stdin.isatty
-Protocol::HTTY::Stream.new($stdout).write_bootstrap
+Protocol::HTTY::Stream.new($stdin, $stdout).write_bootstrap
 
 stream = PrefaceStream.new($stdin, $stdout)
 stream.wait_for_preface

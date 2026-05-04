@@ -26,8 +26,7 @@ end
 describe Protocol::HTTY::Stream do
 	let(:input) {StringIO.new}
 	let(:output) {StringIO.new}
-	let(:io) {IO::Stream::Duplex(input, output)}
-	let(:stream) {subject.new(io)}
+	let(:stream) {subject.new(input, output)}
 	
 	it "writes the HTTY raw bootstrap" do
 		stream.write_bootstrap
@@ -45,7 +44,7 @@ describe Protocol::HTTY::Stream do
 	end
 	
 	it "reads a bootstrap split across one-byte reads" do
-		stream = subject.new(OneByteInput.new("hello\eP+Hraw\e\\"))
+		stream = subject.new(OneByteInput.new("hello\eP+Hraw\e\\"), StringIO.new)
 		
 		expect(stream.read_bootstrap).to be == "raw"
 	end
@@ -56,7 +55,7 @@ describe Protocol::HTTY::Stream do
 		
 		stream.read_bootstrap
 		
-		expect(io.read(5)).to be == "world"
+		expect(stream.read(5)).to be == "world"
 	end
 	
 	it "raises on unsupported bootstrap modes" do
