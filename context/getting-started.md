@@ -43,12 +43,10 @@ Use explicit bootstrap calls when you need:
 
 ~~~ ruby
 require "stringio"
-require "io/stream"
 require "protocol/htty"
 
 output = StringIO.new
-stream = IO::Stream::Duplex(StringIO.new, output)
-htty = Protocol::HTTY::Stream.new(stream)
+htty = Protocol::HTTY::Stream.new(StringIO.new, output)
 
 htty.write_bootstrap
 
@@ -68,18 +66,17 @@ This is the right level when you need:
 
 ~~~ ruby
 require "stringio"
-require "io/stream"
 require "protocol/htty"
 
 transport = StringIO.new
-writer = Protocol::HTTY::Stream.open(IO::Stream::Duplex(StringIO.new, transport), bootstrap: :write)
+writer = Protocol::HTTY::Stream.open(StringIO.new, transport, bootstrap: :write)
 
 writer.write("hello world")
 writer.flush
 
 transport.rewind
 
-reader = Protocol::HTTY::Stream.open(IO::Stream::Duplex(transport, StringIO.new), bootstrap: :read)
+reader = Protocol::HTTY::Stream.open(transport, StringIO.new, bootstrap: :read)
 
 reader.read(11)
 # => "hello world"
@@ -91,19 +88,18 @@ HTTY does not interpret HTTP/2 frames. It only performs the bootstrap and then p
 
 ~~~ ruby
 require "stringio"
-require "io/stream"
 require "protocol/http2"
 require "protocol/htty"
 
 transport = StringIO.new
-stream = Protocol::HTTY::Stream.open(IO::Stream::Duplex(StringIO.new, transport), bootstrap: :write)
+stream = Protocol::HTTY::Stream.open(StringIO.new, transport, bootstrap: :write)
 
 stream.write(Protocol::HTTP2::CONNECTION_PREFACE)
 stream.flush
 
 transport.rewind
 
-reader = Protocol::HTTY::Stream.open(IO::Stream::Duplex(transport, StringIO.new), bootstrap: :read)
+reader = Protocol::HTTY::Stream.open(transport, StringIO.new, bootstrap: :read)
 preface = reader.read(Protocol::HTTP2::CONNECTION_PREFACE.bytesize)
 
 puts preface == Protocol::HTTP2::CONNECTION_PREFACE

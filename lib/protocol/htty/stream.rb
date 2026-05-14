@@ -3,8 +3,6 @@
 # Released under the MIT License.
 # Copyright, 2026, by Samuel Williams.
 
-require "io/stream"
-
 module Protocol
 	module HTTY
 		# Transport an opaque byte stream after the HTTY bootstrap handshake.
@@ -15,10 +13,12 @@ module Protocol
 			BOOTSTRAP_PREFIX = "+H"
 			RAW_MODE = "raw"
 			
-			HTTP2_FRAME_HEADER_SIZE = 9
-			
 			def self.open(input, output, bootstrap: nil, mode: RAW_MODE)
 				stream = self.new(input, output)
+				
+				# Disable buffering:
+				input.sync = true
+				output.sync = true
 				
 				case bootstrap
 				when :write
@@ -39,8 +39,7 @@ module Protocol
 			# @parameter output [IO] The writable endpoint.
 			def initialize(input, output)
 				@input = input
-				@output = ::IO::Stream(output)
-				@frame_remaining = nil
+				@output = output
 				@local_closed = false
 			end
 			
@@ -73,27 +72,9 @@ module Protocol
 			end
 			
 			# Read application bytes from the HTTY transport.
+			# The HTTP/2 framer always requests exact byte counts (header size, then payload length), so we delegate directly to the underlying input.
 			def read(length = nil)
-				if length == 0
-					@frame_remaining = nil if @frame_remaining == 0
-					return +"".b
-				end
-				
-				requested_length = length
-				length = [length, @frame_remaining].min if length && @frame_remaining && @frame_remaining > 0
-				buffer = read_exact(length)
-				
-				if buffer && requested_length == HTTP2_FRAME_HEADER_SIZE && !@frame_remaining
-					if buffer.bytesize == HTTP2_FRAME_HEADER_SIZE
-						frame_length = self.class.frame_length(buffer)
-						@frame_remaining = frame_length if frame_length > 0
-					end
-				elsif buffer && @frame_remaining
-					@frame_remaining -= buffer.bytesize
-					@frame_remaining = nil if @frame_remaining <= 0
-				end
-				
-				return buffer
+				@input.read(length)
 			end
 			
 			# Write application bytes after bootstrap.
@@ -140,33 +121,8 @@ module Protocol
 			
 			private
 			
-			def self.frame_length(buffer)
-				length_high, length_low = buffer.unpack("Cn")
-				return (length_high << 16) | length_low
-			end
-			
-			def read_exact(length)
-				return @input.read if length.nil?
-				
-				buffer = +"".b
-				
-				while buffer.bytesize < length
-					chunk = read_some(length - buffer.bytesize)
-					break unless chunk
-					
-					buffer << chunk.b
-				end
-				
-				return nil if buffer.empty?
-				return buffer
-			end
-			
 			def read_some(length)
-				if @input.respond_to?(:readpartial)
-					@input.readpartial(length)
-				else
-					@input.read(length)
-				end
+				@input.read(length)
 			rescue EOFError, Errno::EIO
 				return nil
 			end
@@ -186,7 +142,7 @@ module Protocol
 			end
 			
 			def consume_packet
-				buffer = +""
+				buffer = String.new.b
 				
 				while chunk = read_some(1)
 					if chunk == ESC

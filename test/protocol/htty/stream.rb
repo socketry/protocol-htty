@@ -4,7 +4,6 @@
 # Copyright, 2026, by Samuel Williams.
 
 require "stringio"
-require "tempfile"
 require "protocol/http2/framer"
 require "protocol/htty"
 
@@ -49,7 +48,7 @@ describe Protocol::HTTY::Stream do
 	end
 	
 	it "exposes the underlying output stream" do
-		expect(stream.io).to be(:is_a?, ::IO::Stream::Buffered)
+		expect(stream.io).to be(:equal?, writer)
 	end
 	
 	it "flushes through the underlying stream" do
@@ -86,41 +85,11 @@ describe Protocol::HTTY::Stream do
 		expect(stream).to be(:readable?)
 	end
 	
-	it "reads HTTP/2 frame headers and payloads without reading ahead" do
-		header = [0, 5, 0, 0, 1].pack("CnCCN")
-		input = StringIO.new("#{header}helloextra")
-		reader = subject.open(input, StringIO.new)
-		
-		expect(reader.read(9)).to be == header
-		expect(reader.read(16)).to be == "hello"
-		expect(reader.read(5)).to be == "extra"
-	end
-	
 	it "rejects writes after the local side is closed" do
 		stream.close
 		
 		expect do
 			stream.write("hello")
 		end.to raise_exception(IOError)
-	end
-	
-	it "wraps raw IO handles using IO::Stream" do
-		Tempfile.create("protocol-htty") do |file|
-			io_stream = subject.open(file, file).io
-			
-			expect(io_stream).to be(:is_a?, ::IO::Stream::Buffered)
-			io_stream.close
-		end
-	end
-	
-	it "does not close wrapped raw IO handles when closed" do
-		Tempfile.create("protocol-htty") do |file|
-			wrapped_stream = subject.open(file, file)
-			
-			wrapped_stream.close
-			
-			expect(file).not.to be(:closed?)
-			file.close
-		end
 	end
 end
