@@ -1,30 +1,35 @@
-From terminal POV:
+# HTTY PTY Example Design
 
-1. Start shell (e.g. fish).
-2. Send "ruby server.rb" to start server.
-3. Scan PTY output for bootstrap DCS sequence. Bytes before the sequence are
-   discarded; bytes after it are retained in the scan buffer for the H2C framer.
+These examples demonstrate HTTY over a real PTY using `protocol-htty` and `protocol-http2`.
 
-4. Exchange H2C connection prefaces, make requests.
+## Server side (`server.rb`)
 
-5. Send GOAWAY once done.
-
-6. Tear down the H2C framer but NOT the underlying PTY IO. The scan buffer
-   (internal to the PTY stream wrapper) survives so no bytes are lost at the
-   session boundary.
-6a. Go back to step 3.
-
-From server side (loops for each session):
+Runs one HTTY session then exits so the shell can return to its prompt.
 
 1. Set raw mode FIRST so the line discipline cannot mangle H2C bytes that
    arrive immediately after the client sees the bootstrap.
-2. Send bootstrap sequence.
-3. Scan stdin for the H2C connection preface (magic + SETTINGS). Bytes before
-   the preface are discarded; bytes after are retained in the stdin buffer.
-   Yes, connection preface is required — it lets us reuse standard H2 libraries.
-4. Serve requests. After sending a response with END_STREAM, break the read
-   loop immediately — do not wait for the client's GOAWAY (client is already
-   scanning for the next bootstrap, so waiting would deadlock).
-5. Send GOAWAY. Close the framer but NOT the underlying stdin/stdout.
-5a. Clear raw mode.
-5b. Go back to step 1.
+2. Open a `Protocol::HTTY::Stream` with `bootstrap: :write`, which emits
+   the bootstrap DCS sequence to stdout.
+3. Pass the stream to `Protocol::HTTP2::Framer` and serve requests.
+4. After sending a response with `END_STREAM`, break the read loop — do not
+   wait for the client's GOAWAY (the client is already scanning for the next
+   bootstrap, so waiting would deadlock).
+5. Send GOAWAY. `Protocol::HTTY::Stream#close` does not close the underlying
+   stdin/stdout, so the terminal remains open.
+
+## Client side (`client.rb`)
+
+Drives the shell in a PTY, repeating the session loop.
+
+1. Spawn the shell in a PTY so the server sees a real TTY on stdin.
+2. Write `ruby server.rb` to the shell.
+3. Scan PTY output for the HTTY bootstrap DCS sequence using `PTYStream`.
+   `PTYStream` is a chunk-buffered wrapper around the PTY master — it exists
+   because `Protocol::HTTY::Stream` is designed for already-raw IO and reads
+   one byte at a time. The client side needs chunk-based buffering plus the
+   multi-session `reset!` dance.
+4. Pass `PTYStream` to `Protocol::HTTP2::Framer` and make a GET request.
+5. Send GOAWAY once the response is received. `PTYStream` is not closed, so
+   its internal buffer survives into the next bootstrap scan.
+6. Call `PTYStream#reset!` to resynchronize the shell before queuing the next
+   session, then loop back to step 2.

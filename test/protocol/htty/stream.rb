@@ -22,7 +22,7 @@ describe Protocol::HTTY::Stream do
 	it "consumes the bootstrap before reading raw bytes" do
 		writer.write("\eP+Hraw\e\\#{Protocol::HTTP2::CONNECTION_PREFACE}")
 		writer.rewind
-
+		
 		reader = subject.open(writer, StringIO.new, bootstrap: :read)
 		
 		expect(reader.read(Protocol::HTTP2::CONNECTION_PREFACE.bytesize)).to be == Protocol::HTTP2::CONNECTION_PREFACE
@@ -72,10 +72,10 @@ describe Protocol::HTTY::Stream do
 		
 		expect(writer).not.to be(:closed?)
 	end
-
+	
 	it "close_write closes writes but preserves readability" do
 		stream.close_write
-
+		
 		expect(stream).to be(:closed?)
 		expect(stream).to be(:readable?)
 		expect(writer).not.to be(:closed?)
