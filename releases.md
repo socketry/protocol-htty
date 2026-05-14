@@ -1,6 +1,6 @@
 # Releases
 
-## Unreleased
+## v0.4.0
 
   - **Breaking**: Drop the `io-stream` dependency. `Stream.new` and `Stream.open` no longer coerce or wrap their `input` and `output` arguments; raw IO objects are used as-is. Callers that relied on `stream.io` returning an `IO::Stream::Buffered` should wrap the IO themselves before passing it in.
   - Simplify `Stream#read` to delegate directly to the underlying input, since the HTTP/2 framer always requests exact byte counts (header size, then payload length).
