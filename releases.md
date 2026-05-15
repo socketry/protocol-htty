@@ -1,6 +1,6 @@
 # Releases
 
-## Unreleased
+## v0.5.0
 
   - Add `Stream#remote_address` returning `nil` to satisfy the `Protocol::HTTP::Peer` interface.
 
