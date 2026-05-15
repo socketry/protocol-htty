@@ -43,6 +43,11 @@ module Protocol
 				@local_closed = false
 			end
 			
+			# Required by {Protocol::HTTP::Peer} but not applicable to HTTY, which does not have a concept of remote addresses.
+			def remote_address
+				return nil
+			end
+			
 			attr :input
 			attr :output
 			

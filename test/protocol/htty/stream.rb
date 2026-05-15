@@ -92,4 +92,8 @@ describe Protocol::HTTY::Stream do
 			stream.write("hello")
 		end.to raise_exception(IOError)
 	end
+	
+	it "returns nil for remote_address" do
+		expect(stream.remote_address).to be_nil
+	end
 end
