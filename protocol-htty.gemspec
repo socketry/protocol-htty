@@ -20,7 +20,7 @@ Gem::Specification.new do |spec|
 		"source_code_uri" => "https://github.com/socketry/protocol-htty.git",
 	}
 	
-	spec.files = Dir.glob(["{lib,test}/**/*", "*.md"], File::FNM_DOTMATCH, base: __dir__)
+	spec.files = Dir.glob(["{context,lib,test}/**/*", "*.md"], File::FNM_DOTMATCH, base: __dir__)
 	
 	spec.required_ruby_version = ">= 3.3"
 	
